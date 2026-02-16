@@ -1,8 +1,14 @@
 # Resume Scorer - AI-Powered Resume Analysis
 
-A modern, full-stack SaaS application built with Next.js 14+ that provides instant AI-powered feedback on resumes. Users can upload their PDF resumes and receive detailed scoring across 6 key criteria, along with actionable improvement suggestions.
+A modern, full-stack SaaS application built with Next.js 15+ that provides instant AI-powered feedback on resumes. Users can upload their PDF resumes and receive detailed scoring across 6 key criteria, along with actionable improvement suggestions.
 
 ![Resume Scorer](https://img.shields.io/badge/Next.js-15-black?logo=next.js) ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue?logo=typescript) ![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.4-38bdf8?logo=tailwindcss)
+
+## 🚀 Live Demo
+
+**Production URL:** [https://resume-scorer-7yxycstak-yairhazans-projects.vercel.app](https://resume-scorer-7yxycstak-yairhazans-projects.vercel.app)
+
+**Repository:** [https://github.com/YairHazan12/resume-scorer](https://github.com/YairHazan12/resume-scorer)
 
 ## Features
 
@@ -104,29 +110,25 @@ resume-scorer/
 
 ## API Integration
 
-### Current Implementation (Mock)
+### ✅ Real AI Implementation (GPT-4o-mini)
 
-The `/api/score` endpoint currently returns mock data for demonstration purposes. See `app/api/score/route.ts` for the implementation.
+The `/api/score` endpoint now uses **OpenAI's GPT-4o-mini** model for intelligent resume analysis. The implementation includes:
 
-### Integrating Real AI
+- **Lazy initialization** - OpenAI client is only created when needed
+- **Graceful fallback** - Falls back to rule-based scoring if API key is missing
+- **Cost-effective** - Uses GPT-4o-mini for optimal price/performance ratio
+- **Structured output** - AI generates JSON responses with detailed feedback
 
-To connect a real AI service (OpenAI, Anthropic, etc.), follow these steps:
+### Configuration
 
-1. Install the AI SDK:
-```bash
-npm install openai  # or your preferred AI provider
-```
+Add your OpenAI API key to Vercel environment variables:
 
-2. Add your API key to `.env.local`:
-```env
-OPENAI_API_KEY=your_api_key_here
-```
+1. Go to your Vercel project settings
+2. Navigate to Environment Variables
+3. Add: `OPENAI_API_KEY=sk-your-api-key-here`
+4. Redeploy (or it will auto-deploy on next push)
 
-3. Update `app/api/score/route.ts`:
-```typescript
-// Uncomment and modify the example at the bottom of the file
-// The mock function can be replaced with a real AI call
-```
+**Without the API key:** The app will use fallback scoring with a notice to configure the key.
 
 The API expects and returns this format:
 ```typescript
@@ -200,10 +202,11 @@ The app can be deployed to any platform that supports Next.js:
 
 ## Future Enhancements
 
+- [x] Real AI integration (OpenAI GPT-4o-mini) ✅
+- [x] Production deployment (Vercel) ✅
 - [ ] User authentication (Clerk, Auth0, NextAuth)
 - [ ] Payment integration (Stripe)
 - [ ] PDF text extraction (pdf-parse implementation)
-- [ ] Real AI integration (OpenAI, Anthropic)
 - [ ] Resume history and tracking
 - [ ] Downloadable PDF reports
 - [ ] A/B testing for resume versions
