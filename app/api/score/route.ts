@@ -19,13 +19,25 @@ interface ResumeScore {
   suggestions: string[];
 }
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Lazy initialization of OpenAI client
+function getOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    return null;
+  }
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+}
 
 // AI-powered resume scoring function
 async function scoreResumeWithAI(resumeText: string): Promise<ResumeScore> {
+  const openai = getOpenAIClient();
+  
+  if (!openai) {
+    console.warn("OpenAI API key not configured, using fallback scoring");
+    return fallbackScoring(resumeText);
+  }
+
   const prompt = `You are an expert resume reviewer and ATS (Applicant Tracking System) specialist. Analyze the following resume and provide detailed scoring.
 
 Resume:
@@ -156,7 +168,7 @@ function fallbackScoring(resumeText: string): ResumeScore {
   const criteria = {
     formatting: {
       score: Math.round(formattingScore),
-      feedback: "Basic formatting check completed. For detailed analysis, ensure OpenAI API key is configured."
+      feedback: "Basic formatting check completed. For detailed AI analysis, configure OPENAI_API_KEY in Vercel environment variables."
     },
     keywords: {
       score: Math.round(keywordsScore),
@@ -186,7 +198,7 @@ function fallbackScoring(resumeText: string): ResumeScore {
   );
 
   const suggestions = [
-    "Configure OPENAI_API_KEY in Vercel environment variables for full AI-powered analysis",
+    "⚠️ Configure OPENAI_API_KEY in Vercel environment variables for full AI-powered analysis",
     "Use consistent formatting with clear section headers",
     "Include quantifiable achievements with numbers and metrics",
     "Ensure complete contact information is present",
