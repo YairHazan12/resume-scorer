@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import OpenAI from "openai";
 
 interface CriterionScore {
   score: number;
@@ -18,8 +19,114 @@ interface ResumeScore {
   suggestions: string[];
 }
 
-// Mock AI scoring function - replace this with real AI API call later
-function scoreResume(resumeText: string): ResumeScore {
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// AI-powered resume scoring function
+async function scoreResumeWithAI(resumeText: string): Promise<ResumeScore> {
+  const prompt = `You are an expert resume reviewer and ATS (Applicant Tracking System) specialist. Analyze the following resume and provide detailed scoring.
+
+Resume:
+"""
+${resumeText}
+"""
+
+Provide a comprehensive analysis in the following JSON format:
+{
+  "criteria": {
+    "formatting": {
+      "score": [0-100],
+      "feedback": "[specific feedback on formatting, structure, and visual presentation]"
+    },
+    "keywords": {
+      "score": [0-100],
+      "feedback": "[feedback on industry keywords and technical terms]"
+    },
+    "experienceClarity": {
+      "score": [0-100],
+      "feedback": "[feedback on experience section clarity and impact]"
+    },
+    "education": {
+      "score": [0-100],
+      "feedback": "[feedback on education section completeness]"
+    },
+    "skillsMatch": {
+      "score": [0-100],
+      "feedback": "[feedback on skills relevance and presentation]"
+    },
+    "atsCompatibility": {
+      "score": [0-100],
+      "feedback": "[feedback on ATS-friendliness]"
+    }
+  },
+  "suggestions": [
+    "[actionable suggestion 1]",
+    "[actionable suggestion 2]",
+    "[actionable suggestion 3]",
+    "[actionable suggestion 4]",
+    "[actionable suggestion 5]",
+    "[actionable suggestion 6]"
+  ]
+}
+
+Scoring guidelines:
+- Formatting: Structure, sections, contact info, bullet points, readability
+- Keywords: Industry-specific terms, technical skills, action verbs
+- Experience Clarity: Clear descriptions, quantifiable achievements, impact
+- Education: Completeness, relevance, presentation
+- Skills Match: Technical and soft skills, relevance to typical job roles
+- ATS Compatibility: Simple formatting, standard headers, keyword optimization
+
+Provide ONLY the JSON response, no additional text.`;
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: "You are an expert resume reviewer. Provide structured JSON responses only."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 1500,
+    });
+
+    const responseText = completion.choices[0]?.message?.content || "";
+    
+    // Parse the JSON response
+    const parsedResponse = JSON.parse(responseText);
+    
+    // Calculate overall score
+    const criteriaScores = Object.values(parsedResponse.criteria).map(
+      (c: any) => c.score
+    );
+    const overallScore = Math.round(
+      criteriaScores.reduce((sum: number, score: number) => sum + score, 0) / 
+      criteriaScores.length
+    );
+
+    return {
+      overallScore,
+      criteria: parsedResponse.criteria,
+      suggestions: parsedResponse.suggestions.slice(0, 6)
+    };
+  } catch (error) {
+    console.error("Error calling OpenAI API:", error);
+    
+    // Fallback to basic scoring if AI fails
+    return fallbackScoring(resumeText);
+  }
+}
+
+// Fallback scoring function (simplified version of original mock)
+function fallbackScoring(resumeText: string): ResumeScore {
   const wordCount = resumeText.split(/\s+/).length;
   const hasEmail = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/.test(resumeText);
   const hasPhone = /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/.test(resumeText);
@@ -28,7 +135,6 @@ function scoreResume(resumeText: string): ResumeScore {
   const hasExperience = /(experience|worked|developed|managed|led|created)/i.test(resumeText);
   const hasSkills = /(skills|technologies|proficient|expert)/i.test(resumeText);
   
-  // Common tech keywords for skills matching
   const techKeywords = [
     "javascript", "python", "java", "react", "node", "sql", "aws", "docker",
     "git", "api", "agile", "scrum", "leadership", "management", "analysis"
@@ -37,138 +143,58 @@ function scoreResume(resumeText: string): ResumeScore {
     resumeText.toLowerCase().includes(keyword)
   ).length;
 
-  // Scoring logic (realistic but deterministic for demo)
   const formattingScore = Math.min(100, 
-    (hasEmail ? 25 : 0) + 
-    (hasPhone ? 25 : 0) + 
-    (hasBulletPoints ? 30 : 0) + 
+    (hasEmail ? 25 : 0) + (hasPhone ? 25 : 0) + (hasBulletPoints ? 30 : 0) + 
     (wordCount > 200 ? 20 : wordCount / 10)
   );
-
   const keywordsScore = Math.min(100, keywordMatches * 12 + 30);
-  
-  const experienceScore = Math.min(100,
-    (hasExperience ? 60 : 20) +
-    (hasBulletPoints ? 20 : 0) +
-    (wordCount > 300 ? 20 : 0)
-  );
-
-  const educationScore = hasEducation ? 
-    Math.min(100, 75 + Math.floor(Math.random() * 25)) : 
-    40 + Math.floor(Math.random() * 30);
-
-  const skillsScore = Math.min(100, 
-    (hasSkills ? 50 : 20) + 
-    (keywordMatches * 8)
-  );
-
-  const atsScore = Math.min(100,
-    (hasEmail && hasPhone ? 40 : 0) +
-    (hasBulletPoints ? 30 : 0) +
-    (!resumeText.includes("\t") ? 15 : 0) +
-    (wordCount > 200 && wordCount < 1000 ? 15 : 0)
-  );
+  const experienceScore = Math.min(100, (hasExperience ? 60 : 20) + (hasBulletPoints ? 20 : 0) + (wordCount > 300 ? 20 : 0));
+  const educationScore = hasEducation ? Math.min(100, 75 + Math.floor(Math.random() * 25)) : 40 + Math.floor(Math.random() * 30);
+  const skillsScore = Math.min(100, (hasSkills ? 50 : 20) + (keywordMatches * 8));
+  const atsScore = Math.min(100, (hasEmail && hasPhone ? 40 : 0) + (hasBulletPoints ? 30 : 0) + 30);
 
   const criteria = {
     formatting: {
       score: Math.round(formattingScore),
-      feedback: formattingScore >= 80 
-        ? "Excellent formatting with clear structure and contact information."
-        : formattingScore >= 60
-        ? "Good formatting, but could benefit from better organization and bullet points."
-        : "Formatting needs improvement. Add clear sections, bullet points, and contact details."
+      feedback: "Basic formatting check completed. For detailed analysis, ensure OpenAI API key is configured."
     },
     keywords: {
       score: Math.round(keywordsScore),
-      feedback: keywordsScore >= 80
-        ? "Great use of industry keywords that will help with ATS systems."
-        : keywordsScore >= 60
-        ? "Decent keyword usage, but consider adding more relevant technical terms."
-        : "Add more industry-specific keywords and technical skills to improve ATS matching."
+      feedback: "Keyword analysis completed. Configure OpenAI API for deeper insights."
     },
     experienceClarity: {
       score: Math.round(experienceScore),
-      feedback: experienceScore >= 80
-        ? "Experience section is clear and well-articulated with strong action verbs."
-        : experienceScore >= 60
-        ? "Experience is present but could be more detailed with quantifiable achievements."
-        : "Experience section needs more clarity. Use bullet points and quantify your achievements."
+      feedback: "Experience section analyzed. AI-powered analysis available with API key."
     },
     education: {
       score: Math.round(educationScore),
-      feedback: educationScore >= 80
-        ? "Education section is complete and well-presented."
-        : educationScore >= 60
-        ? "Education is listed but could include more details like GPA or relevant coursework."
-        : "Add or improve your education section with degree, institution, and graduation date."
+      feedback: "Education section reviewed. Full AI analysis requires API configuration."
     },
     skillsMatch: {
       score: Math.round(skillsScore),
-      feedback: skillsScore >= 80
-        ? "Skills section demonstrates strong technical and professional competencies."
-        : skillsScore >= 60
-        ? "Skills are listed but could be expanded with more specific technologies."
-        : "Expand your skills section to include both technical and soft skills relevant to your field."
+      feedback: "Skills assessment completed. Enhanced analysis available with OpenAI."
     },
     atsCompatibility: {
       score: Math.round(atsScore),
-      feedback: atsScore >= 80
-        ? "Resume is highly compatible with ATS systems - good structure and formatting."
-        : atsScore >= 60
-        ? "Generally ATS-friendly but avoid tables, graphics, and unusual formatting."
-        : "ATS compatibility is low. Use simple formatting, avoid special characters, and use standard section headers."
+      feedback: "ATS compatibility checked. Detailed recommendations available with AI."
     }
   };
 
   const overallScore = Math.round(
-    (criteria.formatting.score +
-     criteria.keywords.score +
-     criteria.experienceClarity.score +
-     criteria.education.score +
-     criteria.skillsMatch.score +
-     criteria.atsCompatibility.score) / 6
+    (criteria.formatting.score + criteria.keywords.score + criteria.experienceClarity.score +
+     criteria.education.score + criteria.skillsMatch.score + criteria.atsCompatibility.score) / 6
   );
 
-  // Generate contextual suggestions based on scores
-  const suggestions: string[] = [];
-  
-  if (criteria.formatting.score < 80) {
-    suggestions.push("Use consistent formatting throughout with clear section headers (Experience, Education, Skills)");
-  }
-  
-  if (criteria.keywords.score < 80) {
-    suggestions.push("Include more industry-specific keywords and technical terms relevant to your target role");
-  }
-  
-  if (criteria.experienceClarity.score < 80) {
-    suggestions.push("Quantify your achievements with numbers and metrics (e.g., 'Increased sales by 25%')");
-  }
-  
-  if (criteria.education.score < 70) {
-    suggestions.push("Ensure your education section includes degree type, institution name, and graduation date");
-  }
-  
-  if (criteria.skillsMatch.score < 80) {
-    suggestions.push("Add a dedicated skills section listing both technical and soft skills");
-  }
-  
-  if (criteria.atsCompatibility.score < 80) {
-    suggestions.push("Avoid tables, images, headers/footers, and complex formatting to ensure ATS compatibility");
-  }
+  const suggestions = [
+    "Configure OPENAI_API_KEY in Vercel environment variables for full AI-powered analysis",
+    "Use consistent formatting with clear section headers",
+    "Include quantifiable achievements with numbers and metrics",
+    "Ensure complete contact information is present",
+    "Add industry-specific keywords relevant to target roles",
+    "Keep resume length to 1-2 pages for optimal readability"
+  ];
 
-  // Always include some general best practices
-  suggestions.push("Keep your resume to 1-2 pages for optimal readability");
-  suggestions.push("Tailor your resume for each job application by matching keywords from the job description");
-  
-  if (!hasEmail || !hasPhone) {
-    suggestions.push("Include complete contact information: email, phone number, and LinkedIn profile");
-  }
-
-  return {
-    overallScore,
-    criteria,
-    suggestions: suggestions.slice(0, 6) // Limit to 6 suggestions
-  };
+  return { overallScore, criteria, suggestions: suggestions.slice(0, 6) };
 }
 
 // API route handler
@@ -191,21 +217,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Mock scoring - replace this with actual AI API call
-    // Example for future integration:
-    // const result = await fetch('https://api.openai.com/v1/chat/completions', {
-    //   method: 'POST',
-    //   headers: {
-    //     'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-    //     'Content-Type': 'application/json'
-    //   },
-    //   body: JSON.stringify({
-    //     model: 'gpt-4',
-    //     messages: [{ role: 'user', content: `Score this resume: ${resumeText}` }]
-    //   })
-    // });
-    
-    const score = scoreResume(resumeText);
+    // Use AI-powered scoring
+    const score = await scoreResumeWithAI(resumeText);
 
     return NextResponse.json(score);
   } catch (error) {
